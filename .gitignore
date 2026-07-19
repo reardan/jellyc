@@ -1,0 +1,9 @@
+/bin/
+/out/
+*.o
+*.elf
+a.out
+jellyc
+jellyc[0-9]
+*_stage*
+.DS_Store

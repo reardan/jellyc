@@ -1,0 +1,21 @@
+# Tiny Jelly program — prints "Hello, Jelly!" and a newline.
+int putchar(int);
+
+int main()
+{
+  putchar('H');
+  putchar('e');
+  putchar('l');
+  putchar('l');
+  putchar('o');
+  putchar(',');
+  putchar(' ');
+  putchar('J');
+  putchar('e');
+  putchar('l');
+  putchar('l');
+  putchar('y');
+  putchar('!');
+  putchar(10);
+  return 0;
+}

@@ -1,0 +1,25 @@
+# Count from 1 to 15. Multiples of 3 print 'F', of 5 print 'B', of both 'Z',
+# otherwise the digit (for 1..9) or 'x' (for 10..15).
+int putchar(int);
+
+int main()
+{
+  int n;
+  n = 1;
+  while (n <= 15) {
+    if (((n == 3) | (n == 6) | (n == 9) | (n == 12) | (n == 15)) &
+        ((n == 5) | (n == 10) | (n == 15)))
+      putchar('Z');
+    else if ((n == 3) | (n == 6) | (n == 9) | (n == 12) | (n == 15))
+      putchar('F');
+    else if ((n == 5) | (n == 10) | (n == 15))
+      putchar('B');
+    else if (n <= 9)
+      putchar('0' + n);
+    else
+      putchar('x');
+    putchar(10);
+    n = n + 1;
+  }
+  return 0;
+}
