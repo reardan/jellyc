@@ -37,11 +37,19 @@ need_jelly() {
 # Map a Jelly atom to a Python expression fragment via the Jelly compiler.
 compile_expr() {
   local code="$1"
+  # Jelly's ị wraps index 0 to the last table entry, so reject here first.
+  case "$code" in
+    H|N|A|+|×|÷|-|%|\*) ;;
+    *)
+      echo "jellyc: unsupported or empty program: $code" >&2
+      echo "jellyc: this Jelly-written compiler supports single atoms: H N A + × ÷ - % *" >&2
+      exit 1
+      ;;
+  esac
   local expr
   expr="$(jelly fun "$COMPILER" "$code")"
   if [[ -z "$expr" || "$expr" == "0" ]]; then
-    echo "jellyc: unsupported or empty program: $code" >&2
-    echo "jellyc: this Jelly-written compiler supports single atoms: H N A + × ÷ - % *" >&2
+    echo "jellyc: compiler returned empty for: $code" >&2
     exit 1
   fi
   printf '%s' "$expr"
