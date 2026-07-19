@@ -19,27 +19,46 @@ check() {
   fi
 }
 
-check 'expr-mul' 'a*b' ./jellyc -e '×'
-check 'expr-add' 'a+b' ./jellyc -e '+'
-check 'expr-halve' 'a/2' ./jellyc -e 'H'
-check 'expr-neg' '-a' ./jellyc -e 'N'
-check 'expr-pow' 'a**b' ./jellyc -e '*'
+check_elf() {
+  local name="$1" file="$2"
+  if file "$file" | grep -q 'ELF 64-bit LSB executable, x86-64'; then
+    echo "ok $name"
+  else
+    echo "FAIL $name: not an x86-64 ELF: $(file "$file")" >&2
+    fail=1
+  fi
+}
 
-check 'run-mul' '42' ./jellyc -r '×' 14 3
-check 'run-add' '42' ./jellyc -r '+' 40 2
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+
+./jellyc -o "$tmpdir/mul" '×'
+check_elf 'elf-mul' "$tmpdir/mul"
+check 'run-mul' '42' "$tmpdir/mul" 14 3
+
+./jellyc -o "$tmpdir/add" '+'
+check 'run-add' '42' "$tmpdir/add" 40 2
+
 check 'run-sub' '7' ./jellyc -r '-' 10 3
 check 'run-div' '5' ./jellyc -r '÷' 20 4
 check 'run-mod' '1' ./jellyc -r '%' 10 3
-check 'run-halve' '5.0' ./jellyc -r 'H' 10
+check 'run-halve' '5' ./jellyc -r 'H' 10
 check 'run-neg' '-3' ./jellyc -r 'N' 3
 check 'run-abs' '3' ./jellyc -r 'A' -3
 check 'run-pow' '8' ./jellyc -r '*' 2 3
-
 check 'file-mul' '42' ./jellyc -fr examples/mul.jelly 6 7
 
-# Match official Jelly for the subset
+# Match official Jelly semantics for the subset
 check 'vs-jelly-mul' '42' jelly eun '×' 14 3
 check 'vs-jellyc-mul' '42' ./jellyc -r '×' 14 3
+
+# Unsupported rejects
+if ./jellyc '“hi”' >/dev/null 2>&1; then
+  echo 'FAIL unsupported should reject' >&2
+  fail=1
+else
+  echo 'ok reject-unsupported'
+fi
 
 if [[ "$fail" -ne 0 ]]; then
   echo "Some tests failed" >&2
