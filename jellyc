@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# jellyc — Jelly → x86-64 ELF compiler, written in Jelly.
+# Requires: https://github.com/DennisMitchell/jellylanguage (`jelly` on PATH)
+# Prefer bin/jellyc1 (freestanding native stage-1) when present.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+ELF_JELLY="$ROOT/elf.jelly"
+COMPILER_JELLY="$ROOT/jellyc.jelly"
+NATIVE="$ROOT/bin/jellyc1"
+export PATH="${HOME}/.local/bin:${PATH}"
+
+# JELLYC_BACKEND=native|jelly|auto (default auto)
+BACKEND="${JELLYC_BACKEND:-auto}"
+
+usage() {
+  cat <<'EOF'
+jellyc — compile Jelly to a static x86-64 Linux ELF (compiler written in Jelly)
+
+Usage:
+  jellyc <code>                 Write ELF bytes to stdout
+  jellyc -o <file> <code>       Write ELF to file and chmod +x
+  jellyc -r <code> [args...]    Compile to a temp ELF and run
+  jellyc -f <file>              Compile UTF-8 .jelly file to stdout
+  jellyc -fo <out> <file>       Compile file to ELF path
+  jellyc -fr <file> [args...]   Compile file and run
+
+Supported subset (single atom):
+  Monads:  H (sar /2)  N (neg)  A (abs)
+  Dyads:   + × ÷ - % *
+
+Backends:
+  bin/jellyc1  freestanding native (preferred when present)
+  jelly        official interpreter + elf.jelly / jellyc.jelly
+  Override with JELLYC_BACKEND=native|jelly|auto
+EOF
+}
+
+need_jelly() {
+  if ! command -v jelly >/dev/null 2>&1; then
+    echo "jellyc: official Jelly interpreter not found on PATH" >&2
+    echo "Install: pip install jellylanguage" >&2
+    echo "         https://github.com/DennisMitchell/jellylanguage" >&2
+    exit 1
+  fi
+}
+
+supported_atom() {
+  case "$1" in
+    H|N|A|+|×|÷|-|%|\*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Concatenate elf.jelly (blob table) + jellyc.jelly (lookup) into one Jelly
+# program. Jelly has no imports; links in one file see each other via ¢.
+run_compiler_jelly() {
+  local code="$1"
+  local combined status
+  combined="$(mktemp)"
+  cat "$ELF_JELLY" "$COMPILER_JELLY" >"$combined"
+  set +e
+  jelly fu "$combined" "$code"
+  status=$?
+  set -e
+  rm -f "$combined"
+  return "$status"
+}
+
+compile_elf_jelly() {
+  local code="$1"
+  if [[ ! -f "$ELF_JELLY" || ! -f "$COMPILER_JELLY" ]]; then
+    echo "jellyc: missing $ELF_JELLY or $COMPILER_JELLY" >&2
+    exit 1
+  fi
+  need_jelly
+  local list
+  list="$(run_compiler_jelly "$code")"
+  LIST="$list" python3 -c 'import ast,os,sys; sys.stdout.buffer.write(bytes(ast.literal_eval(os.environ["LIST"].strip())))'
+}
+
+compile_elf_native() {
+  local code="$1"
+  if [[ ! -x "$NATIVE" ]]; then
+    echo "jellyc: native backend requested but $NATIVE missing; run: make gen" >&2
+    exit 1
+  fi
+  "$NATIVE" "$code"
+}
+
+compile_elf() {
+  local code="$1"
+  if ! supported_atom "$code"; then
+    echo "jellyc: unsupported program: $code" >&2
+    echo "jellyc: supports single atoms: H N A + × ÷ - % *" >&2
+    exit 1
+  fi
+  case "$BACKEND" in
+    native) compile_elf_native "$code" ;;
+    jelly)  compile_elf_jelly "$code" ;;
+    auto)
+      if [[ -x "$NATIVE" ]]; then
+        compile_elf_native "$code"
+      else
+        compile_elf_jelly "$code"
+      fi
+      ;;
+    *)
+      echo "jellyc: bad JELLYC_BACKEND=$BACKEND (use native|jelly|auto)" >&2
+      exit 2
+      ;;
+  esac
+}
+
+if [[ $# -lt 1 ]]; then
+  usage
+  exit 2
+fi
+
+mode="stdout"
+out=""
+file=""
+code=""
+
+case "$1" in
+  -h|--help) usage; exit 0 ;;
+  -o) mode="file"; shift; out="${1:-}"; shift; code="${1:-}"; shift || true ;;
+  -r) mode="run"; shift; code="${1:-}"; shift || true ;;
+  -f) mode="stdout"; shift; file="${1:-}"; shift || true ;;
+  -fo) mode="file"; shift; out="${1:-}"; shift; file="${1:-}"; shift || true ;;
+  -fr) mode="run"; shift; file="${1:-}"; shift || true ;;
+  --) shift; code="${1:-}"; shift || true ;;
+  -)
+    # dyad atom "-" is valid source, not an option
+    code="$1"
+    shift
+    ;;
+  -*)
+    echo "jellyc: unknown option: $1" >&2
+    usage
+    exit 2
+    ;;
+  *)
+    code="$1"
+    shift
+    ;;
+esac
+
+if [[ -n "$file" ]]; then
+  code="$(cat "$file")"
+fi
+code="${code%$'\n'}"
+
+if [[ -z "$code" ]]; then
+  echo "jellyc: missing Jelly code" >&2
+  exit 2
+fi
+
+case "$mode" in
+  stdout)
+    compile_elf "$code"
+    ;;
+  file)
+    if [[ -z "$out" ]]; then
+      echo "jellyc: -o/-fo need an output path" >&2
+      exit 2
+    fi
+    compile_elf "$code" >"$out"
+    chmod +x "$out"
+    ;;
+  run)
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+    compile_elf "$code" >"$tmp"
+    chmod +x "$tmp"
+    "$tmp" "$@"
+    ;;
+esac

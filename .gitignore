@@ -1,0 +1,9 @@
+/bin/*
+!/bin/jellyc1
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+/out/
+*.egg-info/
+.venv/
