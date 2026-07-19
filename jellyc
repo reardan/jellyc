@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # jellyc — Jelly → x86-64 ELF compiler, written in Jelly.
 # Requires: https://github.com/DennisMitchell/jellylanguage (`jelly` on PATH)
+# Prefer bin/jellyc1 (freestanding native stage-1) when present.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 ELF_JELLY="$ROOT/elf.jelly"
 COMPILER_JELLY="$ROOT/jellyc.jelly"
+NATIVE="$ROOT/bin/jellyc1"
 export PATH="${HOME}/.local/bin:${PATH}"
+
+# JELLYC_BACKEND=native|jelly|auto (default auto)
+BACKEND="${JELLYC_BACKEND:-auto}"
 
 usage() {
   cat <<'EOF'
@@ -24,7 +29,10 @@ Supported subset (single atom):
   Monads:  H (sar /2)  N (neg)  A (abs)
   Dyads:   + × ÷ - % *
 
-Sources: elf.jelly (x64 ELF blobs) + jellyc.jelly (atom → blob lookup)
+Backends:
+  bin/jellyc1  freestanding native (preferred when present)
+  jelly        official interpreter + elf.jelly / jellyc.jelly
+  Override with JELLYC_BACKEND=native|jelly|auto
 EOF
 }
 
@@ -37,9 +45,16 @@ need_jelly() {
   fi
 }
 
+supported_atom() {
+  case "$1" in
+    H|N|A|+|×|÷|-|%|\*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Concatenate elf.jelly (blob table) + jellyc.jelly (lookup) into one Jelly
 # program. Jelly has no imports; links in one file see each other via ¢.
-run_compiler() {
+run_compiler_jelly() {
   local code="$1"
   local combined status
   combined="$(mktemp)"
@@ -52,29 +67,50 @@ run_compiler() {
   return "$status"
 }
 
-# Run the Jelly-written compiler; it prints a Python list of byte values.
-# Pack that list to raw ELF bytes on stdout. (Jelly's Ọ UTF-8-encodes high
-# bytes, so the driver does the binary pack step only.)
-compile_elf() {
+compile_elf_jelly() {
   local code="$1"
-  case "$code" in
-    H|N|A|+|×|÷|-|%|\*) ;;
-    *)
-      echo "jellyc: unsupported program: $code" >&2
-      echo "jellyc: supports single atoms: H N A + × ÷ - % *" >&2
-      exit 1
-      ;;
-  esac
   if [[ ! -f "$ELF_JELLY" || ! -f "$COMPILER_JELLY" ]]; then
     echo "jellyc: missing $ELF_JELLY or $COMPILER_JELLY" >&2
     exit 1
   fi
+  need_jelly
   local list
-  list="$(run_compiler "$code")"
+  list="$(run_compiler_jelly "$code")"
   LIST="$list" python3 -c 'import ast,os,sys; sys.stdout.buffer.write(bytes(ast.literal_eval(os.environ["LIST"].strip())))'
 }
 
-need_jelly
+compile_elf_native() {
+  local code="$1"
+  if [[ ! -x "$NATIVE" ]]; then
+    echo "jellyc: native backend requested but $NATIVE missing; run: make gen" >&2
+    exit 1
+  fi
+  "$NATIVE" "$code"
+}
+
+compile_elf() {
+  local code="$1"
+  if ! supported_atom "$code"; then
+    echo "jellyc: unsupported program: $code" >&2
+    echo "jellyc: supports single atoms: H N A + × ÷ - % *" >&2
+    exit 1
+  fi
+  case "$BACKEND" in
+    native) compile_elf_native "$code" ;;
+    jelly)  compile_elf_jelly "$code" ;;
+    auto)
+      if [[ -x "$NATIVE" ]]; then
+        compile_elf_native "$code"
+      else
+        compile_elf_jelly "$code"
+      fi
+      ;;
+    *)
+      echo "jellyc: bad JELLYC_BACKEND=$BACKEND (use native|jelly|auto)" >&2
+      exit 2
+      ;;
+  esac
+}
 
 if [[ $# -lt 1 ]]; then
   usage
@@ -93,6 +129,12 @@ case "$1" in
   -f) mode="stdout"; shift; file="${1:-}"; shift || true ;;
   -fo) mode="file"; shift; out="${1:-}"; shift; file="${1:-}"; shift || true ;;
   -fr) mode="run"; shift; file="${1:-}"; shift || true ;;
+  --) shift; code="${1:-}"; shift || true ;;
+  -)
+    # dyad atom "-" is valid source, not an option
+    code="$1"
+    shift
+    ;;
   -*)
     echo "jellyc: unknown option: $1" >&2
     usage

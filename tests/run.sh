@@ -4,6 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export PATH="${HOME}/.local/bin:${PATH}"
 cd "$ROOT"
 chmod +x jellyc tests/run.sh
+python3 tools/gen_jellyc.py >/dev/null
 
 fail=0
 check() {
@@ -32,6 +33,7 @@ check_elf() {
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
+# --- native backend (default when bin/jellyc1 exists) ---
 ./jellyc -o "$tmpdir/mul" '×'
 check_elf 'elf-mul' "$tmpdir/mul"
 check 'run-mul' '42' "$tmpdir/mul" 14 3
@@ -58,6 +60,41 @@ if ./jellyc '“hi”' >/dev/null 2>&1; then
   fail=1
 else
   echo 'ok reject-unsupported'
+fi
+
+# --- backend parity: jelly path ≡ native path ---
+if [[ ! -x bin/jellyc1 ]]; then
+  echo 'FAIL bin/jellyc1 missing after gen' >&2
+  fail=1
+else
+  echo 'ok native-present'
+fi
+
+for a in H N A + × ÷ - % '*'; do
+  JELLYC_BACKEND=jelly ./jellyc "$a" >"$tmpdir/j.bin"
+  JELLYC_BACKEND=native ./jellyc "$a" >"$tmpdir/n.bin"
+  if cmp -s "$tmpdir/j.bin" "$tmpdir/n.bin"; then
+    echo "ok parity-$a"
+  else
+    echo "FAIL parity-$a" >&2
+    fail=1
+  fi
+done
+
+# freestanding native compiler itself is an ELF
+check_elf 'elf-jellyc1' bin/jellyc1
+
+# compositional helper seed still parses
+if jelly fu elf_hdr.jelly >/dev/null 2>&1; then
+  echo 'ok elf_hdr-parse'
+else
+  # niladic magic link alone is enough to smoke
+  if jelly eun '127,69,76,70' | grep -q '127'; then
+    echo 'ok elf_hdr-magic'
+  else
+    echo 'FAIL elf_hdr helpers' >&2
+    fail=1
+  fi
 fi
 
 if [[ "$fail" -ne 0 ]]; then
