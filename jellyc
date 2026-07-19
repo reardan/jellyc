@@ -4,7 +4,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-COMPILER="$ROOT/jellyc.jelly"
+ELF_JELLY="$ROOT/elf.jelly"
+COMPILER_JELLY="$ROOT/jellyc.jelly"
 export PATH="${HOME}/.local/bin:${PATH}"
 
 usage() {
@@ -19,9 +20,11 @@ Usage:
   jellyc -fo <out> <file>       Compile file to ELF path
   jellyc -fr <file> [args...]   Compile file and run
 
-Supported subset (single atom), codegen in jellyc.jelly:
+Supported subset (single atom):
   Monads:  H (sar /2)  N (neg)  A (abs)
   Dyads:   + × ÷ - % *
+
+Sources: elf.jelly (x64 ELF blobs) + jellyc.jelly (atom → blob lookup)
 EOF
 }
 
@@ -32,6 +35,21 @@ need_jelly() {
     echo "         https://github.com/DennisMitchell/jellylanguage" >&2
     exit 1
   fi
+}
+
+# Concatenate elf.jelly (blob table) + jellyc.jelly (lookup) into one Jelly
+# program. Jelly has no imports; links in one file see each other via ¢.
+run_compiler() {
+  local code="$1"
+  local combined status
+  combined="$(mktemp)"
+  cat "$ELF_JELLY" "$COMPILER_JELLY" >"$combined"
+  set +e
+  jelly fu "$combined" "$code"
+  status=$?
+  set -e
+  rm -f "$combined"
+  return "$status"
 }
 
 # Run the Jelly-written compiler; it prints a Python list of byte values.
@@ -47,8 +65,12 @@ compile_elf() {
       exit 1
       ;;
   esac
+  if [[ ! -f "$ELF_JELLY" || ! -f "$COMPILER_JELLY" ]]; then
+    echo "jellyc: missing $ELF_JELLY or $COMPILER_JELLY" >&2
+    exit 1
+  fi
   local list
-  list="$(jelly fu "$COMPILER" "$code")"
+  list="$(run_compiler "$code")"
   LIST="$list" python3 -c 'import ast,os,sys; sys.stdout.buffer.write(bytes(ast.literal_eval(os.environ["LIST"].strip())))'
 }
 

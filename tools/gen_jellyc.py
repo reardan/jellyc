@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Regenerate jellyc.jelly — table of x86-64 ELF blobs for the Jelly subset.
+"""Regenerate elf.jelly (x86-64 ELF blob table) and jellyc.jelly (lookup).
 
-The compiler users run is jellyc.jelly (pure Jelly). This script only rebuilds
-those blobs from the hand-assembled x64 templates.
+The compiler users run is pure Jelly: elf.jelly holds the freestanding ELF
+images; jellyc.jelly indexes them by atom. This script only rebuilds those
+blobs from the hand-assembled x64 templates.
 """
 from __future__ import annotations
 
@@ -10,7 +11,8 @@ import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "jellyc.jelly"
+ELF_OUT = ROOT / "elf.jelly"
+COMPILER_OUT = ROOT / "jellyc.jelly"
 
 BASE = 0x400000
 HEADER = 120
@@ -210,8 +212,12 @@ def main() -> None:
     table = [build_elf(gen(op)) for _, op in ops]
     table_lit = "[" + ",".join("[" + ",".join(map(str, elf)) + "]" for elf in table) + "]"
     main_link = "³Ḣµ“HNA+×÷-%*”iµị¢"
-    OUT.write_text(table_lit + "\n" + main_link + "\n", encoding="utf-8")
-    print(f"wrote {OUT} ({OUT.stat().st_size} bytes, {len(table)} ELF blobs)")
+    ELF_OUT.write_text(table_lit + "\n", encoding="utf-8")
+    COMPILER_OUT.write_text(main_link + "\n", encoding="utf-8")
+    print(
+        f"wrote {ELF_OUT.name} ({ELF_OUT.stat().st_size} bytes, {len(table)} ELF blobs)"
+    )
+    print(f"wrote {COMPILER_OUT.name} ({main_link})")
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ demo: install
 	./jellyc -o /tmp/jellyc_demo_mul '×'
 	file /tmp/jellyc_demo_mul
 
-# Regenerate the ELF blob table inside jellyc.jelly
+# Regenerate elf.jelly (blobs) + jellyc.jelly (lookup)
 gen:
 	python3 tools/gen_jellyc.py
 

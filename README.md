@@ -21,20 +21,19 @@ file mul            # ELF 64-bit LSB executable, x86-64, statically linked
 
 | Piece | Role |
 |-------|------|
-| `jellyc.jelly` | Compiler in Jelly: table of full ELF blobs + atom lookup (`ị`) |
-| `jellyc` | Driver: runs `jelly fu jellyc.jelly`, packs the byte list to a file |
+| `elf.jelly` | x64 ELF codegen data — nine prebuilt freestanding ELF images |
+| `jellyc.jelly` | Compiler logic — atom → blob lookup (`³Ḣµ“HNA+×÷-%*”iµị¢`) |
+| `jellyc` | Driver: concatenates both `.jelly` files for `jelly`, packs bytes |
 | official `jelly` | Bootstrap runtime |
 
-`jellyc.jelly` is two links:
-
-1. A niladic table — nine prebuilt x86-64 ELF images (one per supported atom)  
-2. `³Ḣµ“HNA+×÷-%*”iµị¢` — take the program atom, index the table, return the byte list  
+Jelly has no imports, so the driver runs `elf.jelly` + `jellyc.jelly` as one
+program (table link, then lookup link; `¢` reads the table above).
 
 Each ELF is a tiny freestanding program: parse `argv` with an inlined `atoi`,
 apply the op, `write` the decimal result, `exit`. No libc.
 
 > Jelly’s `Ọ` UTF-8-encodes bytes ≥ 128, so the driver packs the printed
-> byte list into binary. All **codegen** lives in Jelly.
+> byte list into binary. All **codegen** lives in Jelly (`elf.jelly`).
 
 ## Supported subset
 
@@ -67,8 +66,8 @@ make test
 
 ## Regenerate ELF table
 
-The blobs inside `jellyc.jelly` are produced by `tools/gen_jellyc.py`
-(hand-assembled x64). Users only need `jelly` + `./jellyc`.
+The blobs in `elf.jelly` are produced by `tools/gen_jellyc.py` (hand-assembled
+x64). Users only need `jelly` + `./jellyc`.
 
 ## Heritage
 
