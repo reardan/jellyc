@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# jellyc — Jelly compiler written in Jelly (Dennis Mitchell's language).
+# Requires: https://github.com/DennisMitchell/jellylanguage on PATH as `jelly`
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+COMPILER="$ROOT/jellyc.jelly"
+export PATH="${HOME}/.local/bin:${PATH}"
+
+usage() {
+  cat <<'EOF'
+jellyc — compile Jelly to Python (compiler written in Jelly)
+
+Usage:
+  jellyc <code>                 Print a Python program for this Jelly code
+  jellyc -e <code>              Print only the Python expression fragment
+  jellyc -r <code> [args...]    Compile and run with arguments
+  jellyc -f <file>              Compile Jelly source file (UTF-8)
+  jellyc -fr <file> [args...]   Compile file and run
+
+Supported subset (single atom programs), compiled by jellyc.jelly:
+  Monads:  H (halve)  N (negate)  A (absolute value)
+  Dyads:   + × ÷ - % *
+
+Anything else is rejected by the Jelly-written compiler (index 0).
+EOF
+}
+
+need_jelly() {
+  if ! command -v jelly >/dev/null 2>&1; then
+    echo "jellyc: official Jelly interpreter not found on PATH" >&2
+    echo "Install: pip install jellylanguage   (https://github.com/DennisMitchell/jellylanguage)" >&2
+    exit 1
+  fi
+}
+
+# Map a Jelly atom to a Python expression fragment via the Jelly compiler.
+compile_expr() {
+  local code="$1"
+  local expr
+  expr="$(jelly fun "$COMPILER" "$code")"
+  if [[ -z "$expr" || "$expr" == "0" ]]; then
+    echo "jellyc: unsupported or empty program: $code" >&2
+    echo "jellyc: this Jelly-written compiler supports single atoms: H N A + × ÷ - % *" >&2
+    exit 1
+  fi
+  printf '%s' "$expr"
+}
+
+emit_program() {
+  local expr="$1"
+  local arity="$2"
+  if [[ "$arity" == "1" ]]; then
+    cat <<EOF
+import sys
+a = int(sys.argv[1])
+print($expr)
+EOF
+  else
+    cat <<EOF
+import sys
+a, b = map(int, sys.argv[1:3])
+print($expr)
+EOF
+  fi
+}
+
+arity_of() {
+  case "$1" in
+    H|N|A) echo 1 ;;
+    *) echo 2 ;;
+  esac
+}
+
+need_jelly
+
+if [[ $# -lt 1 ]]; then
+  usage
+  exit 2
+fi
+
+mode="compile"
+file=""
+code=""
+case "$1" in
+  -h|--help) usage; exit 0 ;;
+  -e) mode="expr"; shift; code="${1:-}"; shift || true ;;
+  -r) mode="run"; shift; code="${1:-}"; shift || true ;;
+  -f) mode="compile"; shift; file="${1:-}"; shift || true ;;
+  -fr) mode="run"; shift; file="${1:-}"; shift || true ;;
+  -*)
+    echo "jellyc: unknown option: $1" >&2
+    usage
+    exit 2
+    ;;
+  *)
+    code="$1"
+    shift
+    ;;
+esac
+
+if [[ -n "$file" ]]; then
+  code="$(cat "$file")"
+fi
+
+if [[ -z "$code" ]]; then
+  echo "jellyc: missing Jelly code" >&2
+  exit 2
+fi
+
+# Strip a single trailing newline from file reads for single-atom programs.
+code="${code%$'\n'}"
+
+expr="$(compile_expr "$code")"
+arity="$(arity_of "$code")"
+
+case "$mode" in
+  expr)
+    printf '%s\n' "$expr"
+    ;;
+  compile)
+    emit_program "$expr" "$arity"
+    ;;
+  run)
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' EXIT
+    emit_program "$expr" "$arity" >"$tmp"
+    python3 "$tmp" "$@"
+    ;;
+esac

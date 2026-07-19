@@ -1,9 +1,8 @@
 /bin/
-/out/
-*.o
-*.elf
-a.out
-jellyc
-jellyc[0-9]
-*_stage*
+__pycache__/
+*.pyc
+*.pyo
 .DS_Store
+/out/
+*.egg-info/
+.venv/
