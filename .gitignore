@@ -1,0 +1,6 @@
+vendor/
+build/*
+!build/jellyc.jelly
+!build/blob.inc
+__pycache__/
+*.pyc
