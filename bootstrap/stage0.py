@@ -42,7 +42,8 @@ def main() -> None:
         text = raw.decode("utf-8")
         if text.endswith("\n"):
             text = text[:-1]
-        code = text.replace("\n", "\x7f")
+        # Interpreter splits links on '¶' (U+00B6, code page byte 0x7f).
+        code = text.replace("\n", "¶")
     else:
         code = jellyenv.sbcs_to_str(raw)
 

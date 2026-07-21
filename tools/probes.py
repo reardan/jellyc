@@ -46,6 +46,8 @@ m("lit-str-pilcrow", "“a¶b‘", 0, [97, 127, 98], "¶ legal inside “...‘,
 m("lit-int", "42", 0, 42, "digit-run literal")
 m("lit-list", "1,2,3", 0, [1, 2, 3], "comma list is one literal token")
 m("nilad-100", "³", 0, 100, "³ = 100")
+m("nilad-16", "⁴", 0, 16, "⁴ = 16")
+m("nilad-10", "⁵", 0, 10, "⁵ = 10")
 m("arg-left", "⁸", [5, 6], [5, 6], "⁸ = left argument")
 m("arg-right-default", "⁹", [5, 6], 256, "⁹ defaults to 256 under monadic call")
 
@@ -64,6 +66,8 @@ m("dec", "’", 5, 4, "decrement")
 m("not0", "¬", 0, 1, "logical not of 0")
 m("not3", "¬", 3, 0, "logical not of nonzero")
 m("id", "¹", [7], [7], "identity")
+m("wrap", "W", 5, [5], "W wraps its argument")
+m("wrap-list", "W", [1, 2], [[1, 2]], "W wraps lists too (builds nesting)")
 
 # --- dyadic atoms -----------------------------------------------------------
 d("add", "+", 3, 4, 7, "addition")
@@ -109,10 +113,14 @@ m("each", "‘€", [3, 5], [4, 6], "€ maps a monad")
 m("each-rangeify", "‘€", 3, [2, 3, 4], "€ range-ifies an int argument")
 d("zip-tail", '+"', [1, 2, 3], [10, 20], [11, 22, 3], '" keeps the longer tail')
 m("fold", "+/", [1, 2, 3, 4], 10, "/ left fold")
+m("fold-single", "+/", [7], 7, "/ of a singleton is the element, dyad never called")
+m("fold-int", "+/", 7, 7, "/ of an int folds its wrap")
+d("each-dyad", "+€", [1, 2], 10, [11, 12], "dyad€ maps with fixed right argument")
 m("filter", "¬Ƈ", [0, 1, 0, 2], [0, 0], "Ƈ keeps truthy-predicate elements")
 m("ternary-then", "‘’¬?", 0, 1, "? pops then,else,cond; cond ¬0 truthy")
 m("ternary-else", "‘’¬?", 7, 6, "? takes else branch when cond falsy")
 m("while", "’¹¿", 5, 0, "¿ pops body,cond; loops while cond truthy")
+m("while-list-cond", "Ḋ¹¿", [1, 2, 3], [], "¿ list condition: truthy = nonempty")
 m("group2", "‘‘$", 5, 7, "$ groups two links into a monad")
 m("group2-tail", "‘+$", 5, 11, "$-group: chain [‘,+] on x is (x+1)+x")
 d("swap", "_@", 3, 10, 7, "@ swaps dyad arguments")
@@ -129,9 +137,15 @@ m("mchain-2-0", "+3", 5, 8, "monadic [2,0]: trailing nilad")
 m("mchain-0-2", "3+", 5, 8, "monadic [0,2]: leading nilad feeds dyad")
 m("mchain-2-1", "+‘", 5, 11, "monadic [2,1]: x + inc(x)")
 m("mchain-2", "+", 5, 10, "monadic [2]: dyad reuses the argument")
+m("mchain-2-0-order", "_10", 3, -7, "monadic [2,0]: ret = D(ret, N)")
+m("mchain-0-2-order", "10_", 3, 7, "monadic [0,2]: ret = D(N, ret)")
+m("mchain-2-1-order", "_‘", 5, -1, "monadic [2,1]: ret = D(ret, M(λ))")
+m("mchain-2-order", "‘_", 5, 1, "monadic mid [2]: ret = D(ret, λ)")
 d("dchain-2-2", "+×", 3, 4, 15, "dyadic mid [2,2]: ret = D1(ret, D2(λ,ρ))")
 d("dchain-2-2-2", "+×+", 3, 4, 49, "dyadic leading [2,2,2]: ret = D1(λ,ρ), then [2,2]")
 d("dchain-2-2-0", "+×3", 3, 4, 21, "dyadic [2,2,0]+nilad: ret = D2(D1(ret,ρ), N)")
+d("dchain-2-0", "+3+", 3, 4, 10, "dyadic mid [2,0] then [2]: ((3+3)+4)")
+d("dchain-1", "+‘", 3, 4, 8, "dyadic [2] then [1]: inc(3+4)")
 
 # --- link references --------------------------------------------------------
 m("linkref-L", "‘¶1Ŀ", 5, 6, "1Ŀ calls link 1 as a monad")
@@ -143,6 +157,13 @@ m("linkref-nilad-arg", "‘¶¢", 9, 1,
   "a niladic call evaluates the target monadically with argument 0")
 m("linkref-pound", "7¶1£", 0, 7, "n£ calls link n as a nilad")
 m("recursion", "’ß$0¹?", 3, 0, "ß recurses the current link")
+m("linkref-L-rebinds", "⁸¶‘1Ŀ", 3, 4,
+  "Ŀ rebinds ⁸ via monadic_chain's tail-unwrap of the single-chain target")
+m("linkref-C-rebinds", "⁸¶‘Ç", 3, 4, "Ç rebinds ⁸ to the callee's argument")
+d("linkref-l-arg9", "_⁹¶1ŀ", 3, 4, -1,
+  "ŀ rebinds ⁸ and ⁹ (wrapper goes through variadic_chain)")
+m("linkref-pound-noargs", "“ab‘¶1£;⁸", 5, [97, 98, 5],
+  "£ calls a link niladically; ⁸ there would be stale (forbidden by R3)")
 
 # ----------------------------------------------------------------------------
 if failures:
