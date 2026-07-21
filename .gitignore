@@ -1,5 +1,7 @@
 vendor/
 build/*
+!build/blob.bin
+!build/blob.syms
 !build/jellyc.jelly
 !build/blob.inc
 __pycache__/

@@ -1,0 +1,9 @@
+_start 0
+main_ptr 832
+rt_abort 332
+rt_alloc 378
+rt_concat 681
+rt_emit_value 400
+rt_iterable 483
+rt_len 583
+rt_reverse 609
